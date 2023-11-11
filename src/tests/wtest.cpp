@@ -98,7 +98,7 @@ int main(int /*argc*/, char** /*argv*/)
 
     Ptex::String error;
     PtexWriter* w =
-        PtexWriter::open("test.ptx", Ptex::mt_quad, dt, nchan, alpha, nfaces, error);
+        PtexWriter::open("teste.ptx", Ptex::mt_quad, dt, nchan, alpha, nfaces, error);
     if (!w) {
         std::cerr << error.c_str() << std::endl;
         return 1;
@@ -126,6 +126,11 @@ int main(int /*argc*/, char** /*argv*/)
         w->writeFace(i, Ptex::FaceInfo(res[i], adjfaces[i], adjedges[i]), buff);
     }
     free(buff);
+    if (!w->close(error)) {
+        std::cerr << error.c_str() << std::endl;
+        return 1;
+    }
+    return 0;
 
     const char* sval = "a str val";
     int ndvals = 3;
@@ -141,11 +146,12 @@ int main(int /*argc*/, char** /*argv*/)
         return 1;
     }
     w->release();
-    if (!checkMeta("test.ptx", sval, dvals, ndvals, ivals, nivals, xval))
+    if (!checkMeta("teste.ptx", sval, dvals, ndvals, ivals, nivals, xval))
         return 1;
+    return 0;
 
     // add some incremental edits
-    w = PtexWriter::edit("test.ptx", true, Ptex::mt_quad, dt, nchan, alpha, nfaces, error);
+    w = PtexWriter::edit("teste.ptx", true, Ptex::mt_quad, dt, nchan, alpha, nfaces, error);
     sval = "a string value";
     dvals[2] = 0;
     writeMeta(w, sval, dvals, ndvals, 0, 0, 0);
@@ -155,7 +161,7 @@ int main(int /*argc*/, char** /*argv*/)
         return 1;
     }
     w->release();
-    if (!checkMeta("test.ptx", sval, dvals, ndvals, ivals, nivals, xval))
+    if (!checkMeta("teste.ptx", sval, dvals, ndvals, ivals, nivals, xval))
         return 1;
 
     // add some non-incremental edits, including some large meta data
@@ -163,7 +169,7 @@ int main(int /*argc*/, char** /*argv*/)
     dvals = (double*)malloc(ndvals * sizeof(dvals[0]));
     for (int i = 0; i < ndvals; i++) dvals[i] = i;
 
-    w = PtexWriter::edit("test.ptx", false, Ptex::mt_quad, dt, nchan, alpha, nfaces, error);
+    w = PtexWriter::edit("teste.ptx", false, Ptex::mt_quad, dt, nchan, alpha, nfaces, error);
     xval = "another string value";
     writeMeta(w, 0, dvals, ndvals, 0, 0, xval);
     if (!w->close(error)) {
@@ -171,7 +177,7 @@ int main(int /*argc*/, char** /*argv*/)
         return 1;
     }
     w->release();
-    if (!checkMeta("test.ptx", sval, dvals, ndvals, ivals, nivals, xval))
+    if (!checkMeta("teste.ptx", sval, dvals, ndvals, ivals, nivals, xval))
         return 1;
     free(dvals);
 

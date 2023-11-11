@@ -1,11 +1,13 @@
 if(PTEX_BUILD_STATIC_LIBS)
     add_definitions(-DPTEX_STATIC)
 endif()
+add_executable(wtest_plane wtest_plane.cpp)
 add_executable(wtest wtest.cpp)
 add_executable(rtest rtest.cpp)
 add_executable(ftest ftest.cpp)
 add_executable(halftest halftest.cpp)
 
+target_link_libraries(wtest_plane ${PTEX_LIBRARY})
 target_link_libraries(wtest ${PTEX_LIBRARY})
 target_link_libraries(rtest ${PTEX_LIBRARY})
 target_link_libraries(ftest ${PTEX_LIBRARY})
@@ -23,6 +25,7 @@ function(add_compare_test test_name)
 endfunction()
 
 # add all the tests
+add_test(NAME wtest_plane COMMAND wtest_plane)
 add_test(NAME wtest COMMAND wtest)
 add_compare_test(rtest)
 add_compare_test(ftest)
