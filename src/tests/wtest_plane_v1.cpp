@@ -63,17 +63,13 @@ bool checkMeta(const char* path,
 int main(int /*argc*/, char** /*argv*/)
 {
     Ptex::String error;
-    PtexPtr<PtexTexture> ptx(PtexTexture::open("./ptx_files/mask_black_64.ptx", error));
-    if (!ptx) {
+    PtexPtr<PtexTexture> tx(PtexTexture::open("./ptx_files/mask_black_64.ptx", error));
+    if (!tx) {
         std::cerr << error.c_str() << std::endl;
         return 0;
     }
-    int numFaces = ptx->numFaces();
-    std::cout << "numFaces: " << numFaces << std::endl;
-
-
-    return 0;
-/*
+    Ptex::ResFaceData dataa;
+    tx->putData(0, 0, dataa);
     PtexPtr<PtexMetaData> meta(tx->getMetaData());
     std::vector<int32_t> faceVertCounts;
     std::vector<int32_t> faceVertIndices;
@@ -106,23 +102,21 @@ int main(int /*argc*/, char** /*argv*/)
     }
     std::cout << "reading " << faceVertIndices.size() << " quad vertices" << std::endl;
     int numFaces = faceVertCounts.size();
-    Ptex::DataType dt = tx->dataType();
+    Ptex::DataType dt = Ptex::dt_uint16;
     float ptexOne = Ptex::OneValue(dt);
     typedef uint8_t Dtype;
-    int achan = tx->numChannels();
-    int nchan = tx->alphaChannel();
+    int alpha = 1;
+    int nchan = 3;
     PtexWriter* w = PtexWriter::open("./ptx_files/mask_black_64_write.ptx", Ptex::mt_quad, dt, nchan, alpha, numFaces, error);
     if (!w) {
         std::cerr << error.c_str() << std::endl;
         return 1;
     }
-    for (int faceid = 0; faceid < numFaces; faceid++)
+    int size = faceVertCounts[0] * Ptex::DataSize(dt) * nchan;
+    std::cout << "size: " << size << std::endl;
+    void* buff = malloc(size);
+    for (int i = 0; i < numFaces; i++)
     {
-        Ptex::FaceInfo fi = ptx->getFaceInfo(faceid);
-        int ures = fi.res.u();
-        int vres = fi.res.v();
-        int size = ures * vres * nchan * Ptex::DataSize(dt);
-
         memset(buff, 0, size);
         Dtype* fbuff = (Dtype*)buff;
         int ures = 8, vres = 8;
@@ -259,8 +253,10 @@ int main(int /*argc*/, char** /*argv*/)
             break;
         }   
     }
+    return 0;
 
     // write things like below and add vertex position info, face vertex info etc
+/*
     
     static Ptex::Res res[] = { Ptex::Res(8,7),
                                Ptex::Res(0x0201),

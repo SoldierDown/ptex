@@ -355,7 +355,7 @@ int main(int argc, char** argv)
         std::cout << "numMetaKeys: " << meta->numKeys() << std::endl;
         if (dumpmeta && meta->numKeys()) DumpMetaData(meta);
     }
-
+    std::cout << "what up " << std::endl;
     if (dumpfaceinfo || dumpdata || dumptiling) {
         uint64_t texels = 0;
         for (int i = 0; i < r->numFaces(); i++) {
