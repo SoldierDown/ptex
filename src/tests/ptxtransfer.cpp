@@ -670,7 +670,11 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
                     unsigned char cb = static_cast<unsigned char>(0);
                     for(int c=0;c<numchan;++c)
                     {
-                        if(faceid<toMesh.numFaces()*0.5) 
+                        if(faceid<toMesh.numFaces()*0.25) 
+                            data[c * f.res.size() + ii] = cw;
+                        else if(faceid<toMesh.numFaces()*0.5)
+                            data[c * f.res.size() + ii] = cb;
+                        else if(faceid<toMesh.numFaces()*0.75)
                             data[c * f.res.size() + ii] = cw;
                         else
                             data[c * f.res.size() + ii] = cb;
