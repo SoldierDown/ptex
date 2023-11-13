@@ -568,7 +568,7 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
         
     for (int faceid=0; faceid<toMesh.numFaces(); faceid++)
     {
-        std::cout << "  Writing faces: " << faceid+1 << " / " << toMesh.numFaces() << "\r" << std::flush;
+        // std::cout << "  Writing faces: " << faceid+1 << " / " << toMesh.numFaces() << "\r" << std::flush;
         
         Ptex::FaceInfo f = toPtex->getFaceInfo(faceid);
         
@@ -665,18 +665,20 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
                 std::cout << "data: " << Ptex::DataSize(fromPtex->dataType()) << ", " << f.res.size() << std::endl;
                 for(size_t ii=0;ii<f.res.size();++ii)
                 {
-                    std::cout << static_cast<int>(data[ii]) << std::endl;
-                    unsigned char cw = static_cast<unsigned char>(255);
-                    unsigned char cb = static_cast<unsigned char>(0);
+                    std::cout << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(data[ii]) << std::endl;
                     for(int c=0;c<numchan;++c)
                     {
                         if(faceid<toMesh.numFaces()*0.5) 
-                            data[c * f.res.size() + ii] = cw;
+                            data[c * f.res.size() + ii] = 0x00;
+                            // data[ii * numchan + c] = 0x00;
                         else
-                            data[c * f.res.size() + ii] = cb;
+                            data[c * f.res.size() + ii] = 0xFF;
+                            // data[ii * numchan + c] = 0xFF;
+                        data[c * f.res.size() + ii] = 0xFF;
                     }
-                    std::cout << static_cast<int>(data[ii]) << std::endl;
+                    std::cout << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(data[ii]) << std::endl;
                 }
+
                 w->writeFace(faceid, f, data, 0);
                 delete [] data;
                 
@@ -685,7 +687,7 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
                 continue;
             }
         }
-        std::cout << "not matched" << std::endl; exit(0);
+        
         f.res = toMesh.calculateFaceResolution(faceid,avgTexelSize);
         
         PixelBuffer pixels(dataType,numchan,f.res.size());
@@ -711,12 +713,12 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
     delete [] errval;
     
     std::cout << "\n";
-    if (copied>0) std::cout << "  Copied " << copied << " faces using a tolerance of " << matchDist << std::endl;
+    if (copied>0) std::cout << "  Copied " << copied << " faces using a tolerance of " << matchDist << "\n";
     
-    std::cout << "  Adding meta data..." << std::endl;
+    std::cout << "  Adding meta data...\n";
     w->writeMeta(meta);
     
-    std::cout << "  Closing file..." << std::endl;
+    std::cout << "  Closing file...\n";
     if (!w->close(ptexError))
     {
         std::cerr << ptexError << std::endl;

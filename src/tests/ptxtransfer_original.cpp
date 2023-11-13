@@ -22,19 +22,16 @@
 #include <vector>
 #include <string>
 #include <cmath>
-// #include <omp.h>
+#include <omp.h>
 #include <time.h>
 #include "KdTree.h"
-
-#include <iomanip>
-
 
 
 class Vec3f
 {
+    float p[3];
     
  public:
-    float p[3];
     inline Vec3f()
     { p[0]=0.0f; p[1]=0.0f; p[2]=0.0f; }
     
@@ -453,6 +450,7 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
     }
     
     Ptex::MeshType meshType = fromPtex->meshType();
+    
     Ptex::DataType dataType = fromPtex->dataType();
     int targetAlpha = fromPtex->alphaChannel();
     
@@ -479,28 +477,17 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
     facePts.setSize(fromPtex->numFaces()*4);
     
     // Populate point cloud using input Ptex data
-    Vec3f pmin(1000.f);
-    Vec3f pmax(-1000.f);
     for (int faceid=0; faceid<fromPtex->numFaces(); faceid++)
     {
-        // std::cout << "Reading faces: " << faceid+1 << " / " << fromPtex->numFaces() << std::endl;
+        std::cout << "  Reading faces: " << faceid+1 << " / " << fromPtex->numFaces() << "\r" << std::flush;
         
         const Ptex::FaceInfo& f = fromPtex->getFaceInfo(faceid);
         
         unsigned char* data = new unsigned char[f.res.size()*datasize];
         fromPtex->getData(faceid, data, 0);
-
-        // std::cout << "data size: " << datasize << ", ressize: " << f.res.size() << ": " << f.res.u() << "," << f.res.v() << std::endl;
-        // std::cout << "data size: " << datasize << ", ressize: " << f.res.size() << std::endl;
-        // std::cout << std::endl;
-        for(int uvid=0;uvid<f.res.size();++uvid)
-        {
-            // std::cout << data[uvid * numchan] << ", " << data[uvid * numchan + 1] << ", " << data[uvid * numchan + 2] << std::endl;
-        }
-
         
         // Add points for each texel in input face
-// #pragma omp parallel for
+#pragma omp parallel for
         for (int pix=0; pix<f.res.size(); pix++)
         {
             int uPixel = pix%f.res.u();
@@ -509,13 +496,6 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
             float v = (float(vPixel)+0.5f)/f.res.v();
             Vec3f p;
             fromMesh.evaluate(faceid,u,v,p,f.res.u(),f.res.v());
-            for(int axis=0;axis<3;++axis)
-            {
-                pmin.p[axis] = std::min(pmin.p[axis], p.p[axis]);
-                pmax.p[axis] = std::max(pmax.p[axis], p.p[axis]);
-            }
-            // std::cout << "p: " << p.p[0] << ", " << p.p[1] << ", " << p.p[2] << std::endl; 
-            // std::cout << "length: " << p.length() << std::endl;
             fullPts.store(baseIndex[faceid] + pix, p.getValue(), data+pix*datasize);
         }
         delete [] data;
@@ -526,7 +506,7 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
     
     if (toPtex->meshType()==Ptex::mt_quad)
     {
-// #pragma omp parallel for
+#pragma omp parallel for
         for (int faceid=0; faceid<fromPtex->numFaces(); faceid++)
         {
             // Add four samples for each input face to sparse point cloud
@@ -542,10 +522,10 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
             }
         }
     }
-    // std::cout << "bbox: " << pmin.p[0] << ", " << pmin.p[1] << ", " << pmin.p[2] << " to " << pmax.p[0] << ", " << pmax.p[1] << ", " << pmax.p[2] << std::endl;
+    
     avgTexelSize /= fromPtex->numFaces();
     
-    // std::cout << "\n  Sorting texels...\n";
+    std::cout << "\n  Sorting texels...\n";
     
     fullPts.sortTree();
     if (toPtex->meshType()==Ptex::mt_quad) facePts.sortTree();
@@ -553,11 +533,12 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
     if (searchDist<0)
     {
         searchDist = avgTexelSize*40;
-        // std::cout << "  Calculating a search distance: " << searchDist << "\n";
+        std::cout << "  Calculating a search distance: " << searchDist << "\n";
     }
     if (matchDist<0) matchDist = avgTexelSize;
     
     // Write output data
+    
     PtexPtr<PtexWriter> w(PtexWriter::open(output.c_str(), meshType, dataType,
                           numchan, targetAlpha, toMesh.numFaces(), ptexError));
 
@@ -647,13 +628,9 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
                 unsigned char* data = new unsigned char[f.res.size()*datasize];
                 
                 if (flipV)
-                {
                     fromPtex->getData(fromFace, data+f.res.u()*datasize*(f.res.v()-1), -f.res.u()*datasize);
-                }
                 else
-                {
                     fromPtex->getData(fromFace, data, 0);
-                }
                 
                 if (flipU) imageMirrorRows(data, f.res.u(), f.res.v(), datasize);
                 if (rotations==1||rotations==3)
@@ -661,22 +638,7 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
                     imageRotate(data, f.res.u(), f.res.v(), datasize, rotations);
                     f.res.swapuv();
                 }
-
-                std::cout << "data: " << Ptex::DataSize(fromPtex->dataType()) << ", " << f.res.size() << std::endl;
-                for(size_t ii=0;ii<f.res.size();++ii)
-                {
-                    std::cout << static_cast<int>(data[ii]) << std::endl;
-                    unsigned char cw = static_cast<unsigned char>(255);
-                    unsigned char cb = static_cast<unsigned char>(0);
-                    for(int c=0;c<numchan;++c)
-                    {
-                        if(faceid<toMesh.numFaces()*0.5) 
-                            data[c * f.res.size() + ii] = cw;
-                        else
-                            data[c * f.res.size() + ii] = cb;
-                    }
-                    std::cout << static_cast<int>(data[ii]) << std::endl;
-                }
+                
                 w->writeFace(faceid, f, data, 0);
                 delete [] data;
                 
@@ -685,24 +647,22 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
                 continue;
             }
         }
-        std::cout << "not matched" << std::endl; exit(0);
+        
         f.res = toMesh.calculateFaceResolution(faceid,avgTexelSize);
         
         PixelBuffer pixels(dataType,numchan,f.res.size());
-        std::cout << "res size: " << f.res.size() << std::endl;
-// #pragma omp parallel for
+        
+#pragma omp parallel for
         for (int pix=0; pix<f.res.size(); pix++)
         {
             float u = (float(pix%f.res.u())+0.5f)/f.res.u();
             float v = (float(pix/f.res.u())+0.5f)/f.res.v();
-            std::cout << "uv: " << u << ", " << v << std::endl;
             Vec3f p;
             if (searchDist>0 && toMesh.evaluate(faceid,u,v,p,f.res.u(),f.res.v()))
             {
                 if (fullPts.find(p.getValue(), pixels.getPixel(pix), searchDist)) continue;
             }
-            std::cout << "p: " << p.p[0] << ", " << p.p[1] << ", " << p.p[2] << std::endl;
-            pixels.writePixel(&errval[0], pix); 
+            pixels.writePixel(&errval[0], pix);
         }
         
         w->writeFace(faceid, f, pixels.getData(), 0);
@@ -711,12 +671,12 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
     delete [] errval;
     
     std::cout << "\n";
-    if (copied>0) std::cout << "  Copied " << copied << " faces using a tolerance of " << matchDist << std::endl;
+    if (copied>0) std::cout << "  Copied " << copied << " faces using a tolerance of " << matchDist << "\n";
     
-    std::cout << "  Adding meta data..." << std::endl;
+    std::cout << "  Adding meta data...\n";
     w->writeMeta(meta);
     
-    std::cout << "  Closing file..." << std::endl;
+    std::cout << "  Closing file...\n";
     if (!w->close(ptexError))
     {
         std::cerr << ptexError << std::endl;
@@ -731,8 +691,8 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
     else
         std::cout << "  Finished in " << seconds << " seconds";
         
-    // int threads = omp_get_max_threads();
-    // std::cout << " using " << threads << " thread" << ((threads>1)?"s":"") << "\n";
+    int threads = omp_get_max_threads();
+    std::cout << " using " << threads << " thread" << ((threads>1)?"s":"") << "\n";
     
     return true;
 }
@@ -809,6 +769,6 @@ int main(int argc, char **argv)
         return 0;
     }
     
-    // omp_set_num_threads(numthreads);
+    omp_set_num_threads(numthreads);
     transferPtex(input,output,distance,match);
 }

@@ -8,3 +8,4 @@
 *.slo
 /data
 /*info
+/.vscode
