@@ -406,6 +406,11 @@ std::vector<Vec3f> readRootVerts(std::string filename)
     return vertices;
 }
 
+Vec3f Vec3f2Point(const Vec3f& input)
+{
+    return Vec3f(input.p[0], input.p[1], input.p[2]);
+}
+
 std::vector<Triangle> constructCGALTriangles(const Mesh& mesh)
 {
     std::vector<Triangle> triangles;
@@ -413,9 +418,9 @@ std::vector<Triangle> constructCGALTriangles(const Mesh& mesh)
     for(int fid=0; fid<mesh.faceVertIndices.size();++fid)
     {
         const std::vector<int>& face = mesh.faceVertIndices[fid];
-        triangles.push_back(Triangle(vertices[mesh.faceVertIndices[fid][0]], vertices[mesh.faceVertIndices[fid][1]], vertices[mesh.faceVertIndices[fid][2]]));
+        triangles.push_back(Triangle(Vec3f2Point(vertices[mesh.faceVertIndices[fid][0]]), Vec3f2Point(vertices[mesh.faceVertIndices[fid][1]]), Vec3f2Point(vertices[mesh.faceVertIndices[fid][2]])));
+
     }
-    return triangles;
 }
 
 float distanceSquared(const Vec3f& p1, const Vec3f& p2) {
@@ -435,7 +440,6 @@ int findClosestTriangle(const Vec3f& queryPoint, const std::vector<Triangle>& tr
             distanceSquared(queryPoint, triangle.v2),
             distanceSquared(queryPoint, triangle.v3)
         });
-        
 
         // Update the closest triangle if needed
         if (distSquared < minDistanceSquared) {
@@ -533,36 +537,55 @@ void imageRotate(unsigned char* data, int w, int h, int datasize, int rotations)
 
 bool transferPtex(std::string input, std::string output, float searchDist = -1, float matchDist = -1)
 {
+    std::cout << 1 << std::endl;
     time_t timer1;
     time(&timer1);
     
     Ptex::String ptexError;
     
+    std::cout << 2 << std::endl;
     PtexPtr<PtexTexture> fromPtex(PtexTexture::open(input.c_str(), ptexError, true));
     if (!fromPtex)
     {
         std::cerr << ptexError << "\n";
         return false;
     }
+    
+    std::cout << 3 << std::endl;
+    PtexPtr<PtexTexture> toPtex(PtexTexture::open(output.c_str(), ptexError, true));
+    if (!toPtex)
+    {
+        std::cerr << ptexError << "\n";
+        std::cerr << "Output file must exist and contain geometry meta data for transfer\n";
+        return false;
+    }
+    
+    std::cout << 4 << std::endl;
+    if (fromPtex->meshType()!=toPtex->meshType())
+    {
+        std::cerr << "Mesh types are inconsistent (quad / triangle)\n";
+        return false;
+    }
 
+    std::cout << 5 << std::endl;
     Mesh fromMesh;
-    if (!fromMesh.getMeshData(fromPtex))
+    Mesh toMesh;
+    if (!fromMesh.getMeshData(fromPtex) || !toMesh.getMeshData(toPtex))
     {
         return false;
     }
 
-    std::vector<int> white_faces = getPaintedFaces("D:\\repos\\ptex\\model\\roots10k.obj", fromMesh, fromPtex);
-    for (int fid = 0; fid < white_faces.size(); ++fid)
-    {
-        std::cout << white_faces[fid] << std::endl;
-    }
+    std::cout << 6 << std::endl;
+    std::vector<int> white_faces = getPaintedFaces("D:\\repos\ptex\\build\src\\tests\model", fromMesh, fromPtex);
+    std::cout << 7 << std::endl;
+
     Ptex::MeshType meshType = fromPtex->meshType();
     Ptex::DataType dataType = fromPtex->dataType();
     int targetAlpha = fromPtex->alphaChannel();
     
     int numchan = fromPtex->numChannels();
     int datasize = numchan*Ptex::DataSize(fromPtex->dataType());
-    PtexMetaData* meta = fromPtex->getMetaData();
+    PtexMetaData* meta = toPtex->getMetaData();
     
     // Find total number of texels
     int totalTexels = 0;
@@ -585,15 +608,24 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
     // Populate point cloud using input Ptex data
     Vec3f pmin(1000.f);
     Vec3f pmax(-1000.f);
-    
     for (int faceid=0; faceid<fromPtex->numFaces(); faceid++)
     {
-         //std::cout << "Reading faces: " << faceid+1 << " / " << fromPtex->numFaces() << std::endl;
+        // std::cout << "Reading faces: " << faceid+1 << " / " << fromPtex->numFaces() << std::endl;
         
         const Ptex::FaceInfo& f = fromPtex->getFaceInfo(faceid);
         
         unsigned char* data = new unsigned char[f.res.size()*datasize];
         fromPtex->getData(faceid, data, 0);
+
+        // std::cout << "data size: " << datasize << ", ressize: " << f.res.size() << ": " << f.res.u() << "," << f.res.v() << std::endl;
+        // std::cout << "data size: " << datasize << ", ressize: " << f.res.size() << std::endl;
+        // std::cout << std::endl;
+        for(int uvid=0;uvid<f.res.size();++uvid)
+        {
+            // std::cout << data[uvid * numchan] << ", " << data[uvid * numchan + 1] << ", " << data[uvid * numchan + 2] << std::endl;
+        }
+
+        
         // Add points for each texel in input face
 // #pragma omp parallel for
         for (int pix=0; pix<int(f.res.size()); pix++)
@@ -609,6 +641,8 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
                 pmin.p[axis] = std::min(pmin.p[axis], p.p[axis]);
                 pmax.p[axis] = std::max(pmax.p[axis], p.p[axis]);
             }
+            // std::cout << "p: " << p.p[0] << ", " << p.p[1] << ", " << p.p[2] << std::endl; 
+            // std::cout << "length: " << p.length() << std::endl;
             fullPts.store(baseIndex[faceid] + pix, p.getValue(), data+pix*datasize);
         }
         delete [] data;
@@ -617,7 +651,7 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
         avgTexelSize += s;
     }
     
-    if (fromPtex->meshType()==Ptex::mt_quad)
+    if (toPtex->meshType()==Ptex::mt_quad)
     {
 // #pragma omp parallel for
         for (int faceid=0; faceid<fromPtex->numFaces(); faceid++)
@@ -635,47 +669,48 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
             }
         }
     }
+    // std::cout << "bbox: " << pmin.p[0] << ", " << pmin.p[1] << ", " << pmin.p[2] << " to " << pmax.p[0] << ", " << pmax.p[1] << ", " << pmax.p[2] << std::endl;
     avgTexelSize /= fromPtex->numFaces();
     
-     std::cout << "\n  Sorting texels...\n";
+    // std::cout << "\n  Sorting texels...\n";
     
     fullPts.sortTree();
-    if (fromPtex->meshType()==Ptex::mt_quad) facePts.sortTree();
+    if (toPtex->meshType()==Ptex::mt_quad) facePts.sortTree();
     
     if (searchDist<0)
     {
         searchDist = avgTexelSize*40;
-         std::cout << "  Calculating a search distance: " << searchDist << "\n";
+        // std::cout << "  Calculating a search distance: " << searchDist << "\n";
     }
     if (matchDist<0) matchDist = avgTexelSize;
     
     // Write output data
     PtexPtr<PtexWriter> w(PtexWriter::open(output.c_str(), meshType, dataType,
-                          numchan, targetAlpha, fromMesh.numFaces(), ptexError));
+                          numchan, targetAlpha, toMesh.numFaces(), ptexError));
 
     float* errval = new float[numchan];
     for (int i=0; i<numchan; i++) errval[i] = 1;
     
     int copied = 0;
         
-    for (int faceid=0; faceid<fromMesh.numFaces(); faceid++)
+    for (int faceid=0; faceid<toMesh.numFaces(); faceid++)
     {
-        //std::cout << "  Writing faces: " << faceid+1 << " / " << fromMesh.numFaces() << "\r" << std::flush;
+        std::cout << "  Writing faces: " << faceid+1 << " / " << toMesh.numFaces() << "\r" << std::flush;
         
-        Ptex::FaceInfo f = fromPtex->getFaceInfo(faceid);
+        Ptex::FaceInfo f = toPtex->getFaceInfo(faceid);
         
         // Check for direct face copy
         int fromFace = -1;
         int faceData[4][2];
         
-        if (matchDist>0 && fromPtex->meshType()==Ptex::mt_quad)
+        if (matchDist>0 && toPtex->meshType()==Ptex::mt_quad)
         {
             Vec3f pos;
             for (int i=0; i<4; i++)
             {
                 float u = (i==0 || i==3) ? 0.25 : 0.75;
                 float v = (i<2) ? 0.25 : 0.75;
-                if (!fromMesh.evaluate(faceid,u,v,pos,2,2)) { fromFace = -1; break; }
+                if (!toMesh.evaluate(faceid,u,v,pos,2,2)) { fromFace = -1; break; }
                 if (!facePts.find(pos.getValue(), &faceData[i], matchDist)) { fromFace = -1; break; }
                 if (i==0) fromFace = faceData[i][0];
                 else if (faceData[i][0]!=fromFace) { fromFace = -1; break; }
@@ -694,14 +729,70 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
             const int& v2 = faceData[2][1];
             const int& v3 = faceData[3][1];
             
-            if (true)
+            if (v0==0 && v1==1 && v2==2 && v3==3)
+            {
+                // Direct match, no flip/rotate needed
+            }
+            else if (v0==3 && v1==2 && v2==1 && v3==0)
+            {
+                flipV = true;
+            }
+            else if (v0==1 && v1==0 && v2==3 && v3==2)
+            {
+                flipU = true;
+            }
+            else if (v0==2 && v1==3 && v2==0 && v3==1)
+            {
+                flipU = flipV = true;
+            }
+            else if (v0==1 && v1==2 && v2==3 && v3==0)
+            {
+                rotations = 1;
+            }
+            else if (v0==3 && v1==0 && v2==1 && v3==2)
+            {
+                rotations = 3;
+            }
+            else if (v0==2 && v1==1 && v2==0 && v3==3)
+            {
+                flipV = true;
+                rotations = 1;
+            }
+            else if (v0==0 && v1==3 && v2==2 && v3==1)
+            {
+                flipV = true;
+                rotations = 3;
+            }
+            else
+            {
+                match = false;
+            }
+            
+            if (match)
             {
                 f.res = fromPtex->getFaceInfo(fromFace).res;
                 unsigned char* data = new unsigned char[f.res.size()*datasize];
-                fromPtex->getData(fromFace, data, 0);
+                
+                if (flipV)
+                {
+                    fromPtex->getData(fromFace, data+f.res.u()*datasize*(f.res.v()-1), -f.res.u()*datasize);
+                }
+                else
+                {
+                    fromPtex->getData(fromFace, data, 0);
+                }
+                
+                if (flipU) imageMirrorRows(data, f.res.u(), f.res.v(), datasize);
+                if (rotations==1||rotations==3)
+                {
+                    imageRotate(data, f.res.u(), f.res.v(), datasize, rotations);
+                    f.res.swapuv();
+                }
 
+                std::cout << "data: " << Ptex::DataSize(fromPtex->dataType()) << ", " << f.res.size() << std::endl;
                 for(size_t ii=0;ii<size_t(f.res.size());++ii)
                 {
+                    std::cout << static_cast<int>(data[ii]) << std::endl;
                     unsigned char cw = static_cast<unsigned char>(255);
                     unsigned char cb = static_cast<unsigned char>(0);
                     for(int c=0;c<numchan;++c)
@@ -714,7 +805,9 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
                         {
                             data[c * f.res.size() + ii] = cb;
                         }
+                        data[c * f.res.size() + ii] = cb;
                     }
+                    std::cout << static_cast<int>(data[ii]) << std::endl;
                 }
                 w->writeFace(faceid, f, data, 0);
                 delete [] data;
@@ -724,6 +817,27 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
                 continue;
             }
         }
+        std::cout << "not matched" << std::endl; exit(0);
+        f.res = toMesh.calculateFaceResolution(faceid,avgTexelSize);
+        
+        PixelBuffer pixels(dataType,numchan,f.res.size());
+        std::cout << "res size: " << f.res.size() << std::endl;
+// #pragma omp parallel for
+        for (int pix=0; pix<f.res.size(); pix++)
+        {
+            float u = (float(pix%f.res.u())+0.5f)/f.res.u();
+            float v = (float(pix/f.res.u())+0.5f)/f.res.v();
+            std::cout << "uv: " << u << ", " << v << std::endl;
+            Vec3f p;
+            if (searchDist>0 && toMesh.evaluate(faceid,u,v,p,f.res.u(),f.res.v()))
+            {
+                if (fullPts.find(p.getValue(), pixels.getPixel(pix), searchDist)) continue;
+            }
+            std::cout << "p: " << p.p[0] << ", " << p.p[1] << ", " << p.p[2] << std::endl;
+            pixels.writePixel(&errval[0], pix); 
+        }
+        
+        w->writeFace(faceid, f, pixels.getData(), 0);
     }
     
     delete [] errval;
