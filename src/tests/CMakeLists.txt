@@ -16,6 +16,9 @@ add_executable(ftest ftest.cpp)
 add_executable(halftest halftest.cpp)
 add_executable(ptxtransfer ptxtransfer.cpp)
 
+find_package(CGAL REQUIRED)
+target_link_libraries(ptxtransfer CGAL::CGAL)
+
 target_link_libraries(wtest_plane ${PTEX_LIBRARY})
 target_link_libraries(wtest ${PTEX_LIBRARY})
 target_link_libraries(rtest ${PTEX_LIBRARY})

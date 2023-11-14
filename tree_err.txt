@@ -1,0 +1,66 @@
+[1/2] Building CXX object src/tests/CMakeFiles/ptxtransfer.dir/ptxtransfer.cpp.o
+FAILED: src/tests/CMakeFiles/ptxtransfer.dir/ptxtransfer.cpp.o 
+/usr/bin/c++ -DBOOST_ALL_NO_LIB -DCGAL_USE_GMPXX=1 -DPTEX_STATIC -I/home/haozhesu/ptex/src/ptex -isystem /home/haozhesu/anaconda3/include -Wall -Wextra -pedantic -fopenmp -O3 -DNDEBUG -fvisibility=hidden -frounding-math -std=c++14 -MD -MT src/tests/CMakeFiles/ptxtransfer.dir/ptxtransfer.cpp.o -MF src/tests/CMakeFiles/ptxtransfer.dir/ptxtransfer.cpp.o.d -o src/tests/CMakeFiles/ptxtransfer.dir/ptxtransfer.cpp.o -c /home/haozhesu/ptex/src/tests/ptxtransfer.cpp
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:440:13: error: ‘Triangle’ was not declared in this scope
+  440 | std::vector<Triangle> constructCGALTriangles(const Mesh& mesh)
+      |             ^~~~~~~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:440:21: error: template argument 1 is invalid
+  440 | std::vector<Triangle> constructCGALTriangles(const Mesh& mesh)
+      |                     ^
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:440:21: error: template argument 2 is invalid
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp: In function ‘int constructCGALTriangles(const Mesh&)’:
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:443:17: error: ‘Triangle’ was not declared in this scope
+  443 |     std::vector<Triangle> triangles;
+      |                 ^~~~~~~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:443:25: error: template argument 1 is invalid
+  443 |     std::vector<Triangle> triangles;
+      |                         ^
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:443:25: error: template argument 2 is invalid
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:444:23: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<std::vector<int> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+  444 |     for(int fid=0; fid<mesh.faceVertIndices.size();++fid)
+      |                    ~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:447:19: error: request for member ‘push_back’ in ‘triangles’, which is of non-class type ‘int’
+  447 |         triangles.push_back(Triangle(Vec3f2Point(vertices[mesh.faceVertIndices[fid][0]]), Vec3f2Point(vertices[mesh.faceVertIndices[fid][1]]), Vec3f2Point(vertices[mesh.faceVertIndices[fid][2]])));
+      |                   ^~~~~~~~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:446:33: warning: unused variable ‘face’ [-Wunused-variable]
+  446 |         const std::vector<int>& face = mesh.faceVertIndices[fid];
+      |                                 ^~~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp: In function ‘std::vector<int> getPaintedFaces(const string&, const Mesh&)’:
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:457:17: error: ‘Triangle’ was not declared in this scope
+  457 |     std::vector<Triangle> triangles = constructCGALTriangles(mesh);
+      |                 ^~~~~~~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:457:25: error: template argument 1 is invalid
+  457 |     std::vector<Triangle> triangles = constructCGALTriangles(mesh);
+      |                         ^
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:457:25: error: template argument 2 is invalid
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:458:30: error: request for member ‘begin’ in ‘triangles’, which is of non-class type ‘int’
+  458 |     AABB_tree tree(triangles.begin(), triangles.end());
+      |                              ^~~~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:458:49: error: request for member ‘end’ in ‘triangles’, which is of non-class type ‘int’
+  458 |     AABB_tree tree(triangles.begin(), triangles.end());
+      |                                                 ^~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:459:22: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<CGAL::Point_3<CGAL::Epick> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+  459 |     for(int rid=0;rid<root_vertices.size();++rid)
+      |                   ~~~^~~~~~~~~~~~~~~~~~~~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp: At global scope:
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:474:36: error: ‘Triangulation’ does not name a type
+  474 | Point findClosestPointOnMesh(const Triangulation& mesh, const Point& queryPoint) {
+      |                                    ^~~~~~~~~~~~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp: In function ‘Point findClosestPointOnMesh(const int&, const Point&)’:
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:475:5: error: ‘Triangulation’ has not been declared
+  475 |     Triangulation::Finite_vertices_iterator v_it;
+      |     ^~~~~~~~~~~~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:479:10: error: ‘v_it’ was not declared in this scope
+  479 |     for (v_it = mesh.finite_vertices_begin(); v_it != mesh.finite_vertices_end(); ++v_it) {
+      |          ^~~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:479:22: error: request for member ‘finite_vertices_begin’ in ‘mesh’, which is of non-class type ‘const int’
+  479 |     for (v_it = mesh.finite_vertices_begin(); v_it != mesh.finite_vertices_end(); ++v_it) {
+      |                      ^~~~~~~~~~~~~~~~~~~~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:479:60: error: request for member ‘finite_vertices_end’ in ‘mesh’, which is of non-class type ‘const int’
+  479 |     for (v_it = mesh.finite_vertices_begin(); v_it != mesh.finite_vertices_end(); ++v_it) {
+      |                                                            ^~~~~~~~~~~~~~~~~~~
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp: In function ‘bool transferPtex(std::string, std::string, float, float)’:
+/home/haozhesu/ptex/src/tests/ptxtransfer.cpp:782:35: warning: comparison of integer expressions of different signedness: ‘size_t’ {aka ‘long unsigned int’} and ‘int’ [-Wsign-compare]
+  782 |                 for(size_t ii=0;ii<f.res.size();++ii)
+      |                                 ~~^~~~~~~~~~~~~
+ninja: build stopped: subcommand failed.

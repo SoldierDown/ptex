@@ -25,20 +25,10 @@
 // #include <omp.h>
 #include <time.h>
 #include "KdTree.h"
+
 #include <iomanip>
 
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-#include <CGAL/Orthogonal_k_neighbor_search.h>
-#include <CGAL/Search_traits_3.h>
-typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
-typedef K::Point_3 Point_3;
-typedef CGAL::Search_traits_3<K> Traits;
-typedef CGAL::Orthogonal_k_neighbor_search<Traits> K_neighbor_search;
 
-struct Triangle {
-    Point_3 v1, v2, v3;
-    Triangle(const Point_3& _v1, const Point_3& _v2, const Point_3& _v3) : v1(_v1), v2(_v2), v3(_v3) {}
-};
 
 class Vec3f
 {
@@ -136,11 +126,12 @@ class PointCloud
 
 class Mesh
 {
- public:
     std::vector<Vec3f> verts;
     std::vector< std::vector<int> > faceVertIndices;
+
+ public:
+    
     int numFaces() const { return faceVertIndices.size(); }
-    int numVerts() const { return verts.size(); }
     
     inline bool evaluate(int faceid, float u, float v, Vec3f& p, int resU = 0, int resV = 0)
     {
@@ -385,124 +376,6 @@ class PixelBuffer
     { return (unsigned char*)_data+pixelIndex*_numChannels*Ptex::DataSize(_dataType); }
 };
 
-std::vector<Point_3> readRootVerts(std::string filename)
-{
-    std::vector<Point_3> vertices;
-
-    std::ifstream objFile(filename);
-    if (!objFile.is_open()) {
-        std::cerr << "Error opening file: " << filename << std::endl;
-        return vertices;
-    }
-
-    std::string line;
-    while (std::getline(objFile, line)) {
-        std::istringstream iss(line);
-        std::string type;
-        iss >> type;
-
-        if (type == "v") {
-            float x, y, z;
-            iss >> x >> y >> z;
-            vertices.emplace_back(x, y, z);
-        }
-    }
-
-    objFile.close();
-    return vertices;
-}
-
-Point_3 Vec3f2Point(const Vec3f& input)
-{
-    return Point_3(input.p[0], input.p[1], input.p[2]);
-}
-void constructCGALTriangles(const Mesh& mesh, std::vector<Triangle>& vtriangles, std::list<Triangle>& ltriangles)
-{
-    vtriangles.clear();
-    ltriangles.clear();
-    std::vector<Vec3f> vertices = mesh.verts;
-    for(int fid=0; fid<mesh.faceVertIndices.size();++fid)
-    {
-        const std::vector<int>& face = mesh.faceVertIndices[fid];
-        ltriangles.push_back(Triangle(Vec3f2Point(vertices[mesh.faceVertIndices[fid][0]]), Vec3f2Point(vertices[mesh.faceVertIndices[fid][1]]), Vec3f2Point(vertices[mesh.faceVertIndices[fid][2]])));
-        vtriangles.push_back(Triangle(Vec3f2Point(vertices[mesh.faceVertIndices[fid][0]]), Vec3f2Point(vertices[mesh.faceVertIndices[fid][1]]), Vec3f2Point(vertices[mesh.faceVertIndices[fid][2]])));
-
-    }
-}
-
-float distanceSquared(const Point_3& p1, const Point_3& p2) {
-    return std::pow(p1.x() - p2.x(), 2) + std::pow(p1.y() - p2.y(), 2) + std::pow(p1.z() - p2.z(), 2);
-}
-
-int findClosestTriangle(const Point_3& queryPoint, const std::vector<Triangle>& triangles) {
-    float minDistanceSquared = std::numeric_limits<float>::max();
-    int closestTriangleID = -1;
-
-    for (int i = 0; i < triangles.size(); ++i) {
-        const Triangle& triangle = triangles[i];
-
-        // Calculate the squared distance from the query point to the triangle
-        float distSquared = std::min({
-            distanceSquared(queryPoint, triangle.v1),
-            distanceSquared(queryPoint, triangle.v2),
-            distanceSquared(queryPoint, triangle.v3)
-        });
-
-        // Update the closest triangle if needed
-        if (distSquared < minDistanceSquared) {
-            minDistanceSquared = distSquared;
-            closestTriangleID = i;
-        }
-    }
-
-    return closestTriangleID;
-}
-
-std::vector<int> getPaintedFaces(const std::string& filename, const Mesh& mesh, const PtexPtr<PtexTexture>& fromPtex)
-{
-    std::vector<int> white_faces(mesh.numFaces(), 0);
-    std::vector<Point_3> root_vertices = readRootVerts(filename);
-    // Triangulation triangulation = constructCGALMesh(mesh);
-    std::vector<Triangle> vtriangles;
-    std::list<Triangle> ltriangles;
-    constructCGALTriangles(mesh, vtriangles, ltriangles);
-    // K_neighbor_search search(vtriangles.begin(), vtriangles.end());
-
-    for(int rid=0;rid<root_vertices.size();++rid)
-    {
-        int id = findClosestTriangle(root_vertices[rid], vtriangles);
-        white_faces[id] = 1;
-    }
-
-    bool to_continue = false;
-    while(to_continue)
-    {
-        std::vector<int> white_faces_bak = white_faces;
-        for(int fid=0;fid<fromPtex->numFaces();++fid)
-        {
-            const Ptex::FaceInfo& f = fromPtex->getFaceInfo(fid);
-            int numActivated = 0;            
-            for(int adj=0;adj<4;++adj)
-            {
-                if(white_faces_bak[f.adjfaces[adj]])
-                {
-                    ++numActivated;
-                }
-            }
-            if(numActivated >= 3)
-            {
-                white_faces[fid] = 1;
-            }
-        }
-        if(white_faces == white_faces_bak)
-        {
-            to_continue = false;
-        }
-    }
-
-
-    return white_faces;
-}
 
 void imageMirrorRows(unsigned char* data, int w, int h, int datasize)
 {
@@ -571,17 +444,14 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
         std::cerr << "Mesh types are inconsistent (quad / triangle)\n";
         return false;
     }
-
+    
     Mesh fromMesh;
     Mesh toMesh;
     if (!fromMesh.getMeshData(fromPtex) || !toMesh.getMeshData(toPtex))
     {
         return false;
     }
-
-    std::vector<int> white_faces = getPaintedFaces("./model/roots10k.obj", fromMesh, fromPtex);
-
-
+    
     Ptex::MeshType meshType = fromPtex->meshType();
     Ptex::DataType dataType = fromPtex->dataType();
     int targetAlpha = fromPtex->alphaChannel();
@@ -631,7 +501,7 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
         
         // Add points for each texel in input face
 // #pragma omp parallel for
-        for (int pix=0; pix<int(f.res.size()); pix++)
+        for (int pix=0; pix<f.res.size(); pix++)
         {
             int uPixel = pix%f.res.u();
             int vPixel = pix/f.res.u();
@@ -793,22 +663,21 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
                 }
 
                 std::cout << "data: " << Ptex::DataSize(fromPtex->dataType()) << ", " << f.res.size() << std::endl;
-                for(size_t ii=0;ii<size_t(f.res.size());++ii)
+                for(size_t ii=0;ii<f.res.size();++ii)
                 {
                     std::cout << static_cast<int>(data[ii]) << std::endl;
                     unsigned char cw = static_cast<unsigned char>(255);
                     unsigned char cb = static_cast<unsigned char>(0);
                     for(int c=0;c<numchan;++c)
                     {
-                        if(white_faces[faceid])
-                        {
+                        if(faceid<toMesh.numFaces()*0.25) 
                             data[c * f.res.size() + ii] = cw;
-                        }
-                        else
-                        {
+                        else if(faceid<toMesh.numFaces()*0.5)
                             data[c * f.res.size() + ii] = cb;
-                        }
-                        data[c * f.res.size() + ii] = cb;
+                        else if(faceid<toMesh.numFaces()*0.75)
+                            data[c * f.res.size() + ii] = cw;
+                        else
+                            data[c * f.res.size() + ii] = cb;
                     }
                     std::cout << static_cast<int>(data[ii]) << std::endl;
                 }
