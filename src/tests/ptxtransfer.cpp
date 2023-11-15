@@ -28,7 +28,22 @@
 #include <fstream>
 #include <sstream>
 
-
+#include <CGAL/Simple_cartesian.h>
+#include <CGAL/AABB_tree.h>
+#include <CGAL/AABB_traits.h>
+#include <CGAL/Polyhedron_3.h>
+#include <CGAL/Polyhedron_items_with_id_3.h>
+#include <CGAL/AABB_face_graph_triangle_primitive.h>
+typedef CGAL::Simple_cartesian<float> K;
+typedef K::FT FT;
+typedef K::Point_3 Point;
+typedef K::Segment_3 Segment;
+//typedef CGAL::Polyhedron_items_with_id_3<K> Polyhedron;
+typedef CGAL::Polyhedron_3<K, CGAL::Polyhedron_items_with_id_3> Polyhedron;
+typedef CGAL::AABB_face_graph_triangle_primitive<Polyhedron> Primitive;
+typedef CGAL::AABB_traits<K, Primitive> Traits;
+typedef CGAL::AABB_tree<Traits> Tree;
+typedef Tree::Point_and_primitive_id Point_and_primitive_id;
 
 class Vec3f
 {
@@ -58,7 +73,7 @@ class Vec3f
     
     inline float length() const
     { return std::sqrt(p[0]*p[0]+p[1]*p[1]+p[2]*p[2]); }
-    
+
     inline float& operator[](int n)
     { return p[n]; }
     
@@ -81,9 +96,15 @@ class Vec3f
     { return Vec3f(p[0]/f, p[1]/f, p[2]/f); }
 };
 
-struct Triangle {
-    Vec3f v1, v2, v3;
-    Triangle(const Vec3f& _v1, const Vec3f& _v2, const Vec3f& _v3) : v1(_v1), v2(_v2), v3(_v3) {}
+struct Quad {
+    Vec3f v[4];
+    Quad(const Vec3f& _v0, const Vec3f& _v1, const Vec3f& _v2, const Vec3f& _v3)
+    {
+        v[0] = _v0;
+        v[1] = _v1;
+        v[2] = _v2;
+        v[3] = _v3;
+    }
 };
 
 class PointCloud
@@ -235,7 +256,7 @@ class Mesh
             std::cerr << "Geometry meta data not found in Ptex file\n";
             return false;
         }
-
+        
         const float* vp;
         const int *fvi, *fvc;
         int vertcount, indexcount, facevertcount;
@@ -406,59 +427,88 @@ std::vector<Vec3f> readRootVerts(std::string filename)
     return vertices;
 }
 
-std::vector<Triangle> constructCGALTriangles(const Mesh& mesh)
+std::vector<Quad> constructCGALQuads(const Mesh& mesh)
 {
-    std::vector<Triangle> triangles;
+    std::vector<Quad> quads;
     std::vector<Vec3f> vertices = mesh.verts;
-    for(int fid=0; fid<mesh.faceVertIndices.size();++fid)
+    for (int fid = 0; fid < mesh.faceVertIndices.size(); ++fid)
     {
         const std::vector<int>& face = mesh.faceVertIndices[fid];
-        triangles.push_back(Triangle(vertices[mesh.faceVertIndices[fid][0]], vertices[mesh.faceVertIndices[fid][1]], vertices[mesh.faceVertIndices[fid][2]]));
+        quads.push_back(Quad(vertices[mesh.faceVertIndices[fid][0]], vertices[mesh.faceVertIndices[fid][1]], vertices[mesh.faceVertIndices[fid][2]], vertices[mesh.faceVertIndices[fid][3]]));
     }
-    return triangles;
+    return quads;
+}
+
+
+float dot(Vec3f a, Vec3f b)
+{
+    return a.p[0] * b.p[0] + a.p[1] * b.p[1] + a.p[2] * b.p[2];
+}
+
+Vec3f cross(Vec3f a, Vec3f b)
+{
+    Vec3f result;
+    result.p[0] = a.p[1] * b.p[2] - a.p[2] * b.p[1];
+    result.p[1] = a.p[2] * b.p[0] - a.p[0] * b.p[2];
+    result.p[2] = a.p[0] * b.p[1] - a.p[1] * b.p[0];
+    return result;
+}
+
+float pointToPlaneDistance(const Vec3f& P, const Vec3f& normal, const Vec3f& pointOnPlane) {
+    Vec3f disp = P - pointOnPlane;
+    return std::abs(dot(disp, normal) / normal.length());
 }
 
 float distanceSquared(const Vec3f& p1, const Vec3f& p2) {
     return (p1 - p2).length();
 }
 
-int findClosestTriangle(const Vec3f& queryPoint, const std::vector<Triangle>& triangles) {
-    float minDistanceSquared = std::numeric_limits<float>::max();
-    int closestTriangleID = -1;
-
-    for (int i = 0; i < triangles.size(); ++i) {
-        const Triangle& triangle = triangles[i];
-
-        // Calculate the squared distance from the query point to the triangle
-        float distSquared = std::min({
-            distanceSquared(queryPoint, triangle.v1),
-            distanceSquared(queryPoint, triangle.v2),
-            distanceSquared(queryPoint, triangle.v3)
-        });
-        
-
-        // Update the closest triangle if needed
-        if (distSquared < minDistanceSquared) {
-            minDistanceSquared = distSquared;
-            closestTriangleID = i;
-        }
-    }
-
-    return closestTriangleID;
+bool pointInQuad(const Vec3f& queryPoint, const Quad& quad)
+{
+    return false;
 }
+
+Point Vec3f2Point(const Vec3f& p)
+{
+    return Point(p.p[0], p.p[1], p.p[2]);
+}
+
 
 std::vector<int> getPaintedFaces(const std::string& filename, const Mesh& mesh, const PtexPtr<PtexTexture>& fromPtex)
 {
+    const float radius = 1.f;
     std::vector<int> white_faces(mesh.numFaces(), 0);
     std::vector<Vec3f> root_vertices = readRootVerts(filename);
-    // Triangulation triangulation = constructCGALMesh(mesh);
-    std::vector<Triangle> triangles = constructCGALTriangles(mesh);
-    // K_neighbor_search search(vtriangles.begin(), vtriangles.end());
+    std::vector<Quad> quads = constructCGALQuads(mesh);
+
+    Polyhedron polyhedron;
+    for (int qid = 0; qid < quads.size(); ++qid)
+    {
+        Point v0 = Vec3f2Point(quads[qid].v[0]);
+        Point v1 = Vec3f2Point(quads[qid].v[1]);
+        Point v2 = Vec3f2Point(quads[qid].v[2]);
+        Point v3 = Vec3f2Point(quads[qid].v[3]);
+        polyhedron.make_tetrahedron(v0, v1, v2, v3);
+    }
+    int i = 0;
+    for (Polyhedron::Face_iterator facet = polyhedron.facets_begin(); facet != polyhedron.facets_end(); ++facet) {
+        facet->id() = i++;
+    }
+
+    // Build the AABB tree for efficient spatial search
+    Tree tree(CGAL::faces(polyhedron).first, CGAL::faces(polyhedron).second, polyhedron);
 
     for(int rid=0;rid<root_vertices.size();++rid)
     {
-        int id = findClosestTriangle(root_vertices[rid], triangles);
-        white_faces[id] = 1;
+        Point query_point = Vec3f2Point(root_vertices[rid]);
+        Point_and_primitive_id pp = tree.closest_point_and_primitive(query_point);
+        Point p = pp.first;
+        Polyhedron::Face_handle f = pp.second;
+        int id = f->id()/4;
+        if (id >= 0)
+        {
+            white_faces[id] = 1;
+        }
     }
 
     bool to_continue = false;
@@ -468,6 +518,17 @@ std::vector<int> getPaintedFaces(const std::string& filename, const Mesh& mesh, 
         for(int fid=0;fid<fromPtex->numFaces();++fid)
         {
             const Ptex::FaceInfo& f = fromPtex->getFaceInfo(fid);
+            //if (white_faces_bak[fid])
+            //{
+            //    for (int adj = 0; adj < 4; ++adj)
+            //    {
+            //        int fn = f.adjfaces[adj];
+            //        if (fn >= 0)
+            //        {
+            //            white_faces[fn] = 1;
+            //        }
+            //    }
+            //}
             int numActivated = 0;            
             for(int adj=0;adj<4;++adj)
             {
@@ -486,8 +547,8 @@ std::vector<int> getPaintedFaces(const std::string& filename, const Mesh& mesh, 
             to_continue = false;
         }
     }
-
-
+    
+    //white_faces = std::vector<int>(fromPtex->numFaces(), 1);
     return white_faces;
 }
 
@@ -531,7 +592,7 @@ void imageRotate(unsigned char* data, int w, int h, int datasize, int rotations)
     delete [] newdata;
 }
 
-bool transferPtex(std::string input, std::string output, float searchDist = -1, float matchDist = -1)
+bool transferPtex(std::string input, std::string output, std::string roots, float searchDist = -1, float matchDist = -1)
 {
     time_t timer1;
     time(&timer1);
@@ -550,12 +611,7 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
     {
         return false;
     }
-
-    std::vector<int> white_faces = getPaintedFaces("D:\\repos\\ptex\\model\\roots10k.obj", fromMesh, fromPtex);
-    for (int fid = 0; fid < white_faces.size(); ++fid)
-    {
-        std::cout << white_faces[fid] << std::endl;
-    }
+    std::vector<int> white_faces = getPaintedFaces(roots, fromMesh, fromPtex);
     Ptex::MeshType meshType = fromPtex->meshType();
     Ptex::DataType dataType = fromPtex->dataType();
     int targetAlpha = fromPtex->alphaChannel();
@@ -758,7 +814,7 @@ bool transferPtex(std::string input, std::string output, float searchDist = -1, 
 void showUsage()
 {
     std::cout << "Usage:\n";
-    std::cout << "    ptxtransfer [options] <old.ptx> <new.ptx>\n\n";
+    std::cout << "    ptxtransfer [options] <old.ptx> <new.ptx> <roots.obj>\n\n";
     std::cout << "Options:\n";
     std::cout << "    -d distance    maximum texel search distance\n";
     std::cout << "    -m distance    tolerance for direct face transfer\n";
@@ -776,6 +832,7 @@ int main(int argc, char **argv)
     
     std::string input = "";
     std::string output = "";
+    std::string roots = "";
     int numthreads = 1;
     float distance = -1;
     float match = -1;
@@ -785,24 +842,24 @@ int main(int argc, char **argv)
         
         if (arg[0] == '-')
         {
-            if (arg=="-h" || arg=="-help")
+            if (arg == "-h" || arg == "-help")
             {
                 showUsage();
                 return 0;
             }
-            else if (arg=="-t")
+            else if (arg == "-t")
             {
-                if (i>=argc) { showUsage(); return 1; }
+                if (i >= argc) { showUsage(); return 1; }
                 numthreads = atoi(argv[i++]);
             }
-            else if (arg=="-d")
+            else if (arg == "-d")
             {
-                if (i>=argc) { showUsage(); return 1; }
+                if (i >= argc) { showUsage(); return 1; }
                 distance = atof(argv[i++]);
             }
-            else if (arg=="-m")
+            else if (arg == "-m")
             {
-                if (i>=argc) { showUsage(); return 1; }
+                if (i >= argc) { showUsage(); return 1; }
                 match = atof(argv[i++]);
             }
             else
@@ -811,8 +868,9 @@ int main(int argc, char **argv)
                 return 1;
             }
         }
-        else if (input=="") input = arg;
-        else if (output=="") output = arg;
+        else if (input == "") input = arg;
+        else if (output == "") output = arg;
+        else if (roots == "") roots = arg;
         else 
         {
             showUsage();
@@ -820,12 +878,12 @@ int main(int argc, char **argv)
         }
     }
     
-    if (input=="" || output=="")
+    if (input == "" || output == "" || roots == "")
     {
         showUsage();
         return 0;
     }
     
     // omp_set_num_threads(numthreads);
-    transferPtex(input,output,distance,match);
+    transferPtex(input, output, roots, distance, match);
 }
